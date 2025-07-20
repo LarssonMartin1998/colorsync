@@ -1,15 +1,58 @@
 {
-  description = "A very basic flake";
+  description = "Colorsync flake";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs }: {
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        stdenv = pkgs.stdenv;
 
-    packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
+        name = "colorsync";
+        version = "0.0";
+      in
+      {
+        packages.colorsync = stdenv.mkDerivation {
+          pname = name;
+          version = version;
+          src = ./.;
 
-    packages.x86_64-linux.default = self.packages.x86_64-linux.hello;
+          nativeBuildInputs = with pkgs; [
+            zig
+          ];
 
-  };
+          buildPhase = ''
+            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+            zig build --verbose --color off --summary all
+          '';
+
+          doCheck = true;
+          checkPhase = ''
+            zig build test --summary all
+          '';
+
+          installPhase = ''
+            runHook preInstall
+
+            mkdir -p $out
+            cp -r zig-out/* $out/
+
+            runHook postInstall
+          '';
+        };
+
+        packages.hello = pkgs.hello;
+        packages.default = self.packages.${system}.colorsync;
+      }
+    );
 }
