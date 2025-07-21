@@ -1,6 +1,7 @@
 const std = @import("std");
 const config = @import("config.zig");
 const utils = @import("utils.zig");
+const cli = @import("cli.zig");
 
 fn getConfigPath() ![]const u8 {
     const home_path = try utils.getEnv("HOME");
@@ -14,19 +15,5 @@ pub fn main() !void {
     var fixed = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fixed.allocator();
 
-    const stdout = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout);
-    const writer = bw.writer();
-
-    const entries = try config.readAlloc(allocator, try getConfigPath());
-    for (entries.items) |entry| {
-        try writer.print("{s}\n", .{entry});
-    }
-
-    try config.setCurrent("test value");
-
-    const curr = try config.getCurrent();
-    try writer.print("{s}\n", .{curr});
-
-    try bw.flush();
+    try cli.run(allocator);
 }
