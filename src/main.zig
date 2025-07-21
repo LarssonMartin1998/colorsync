@@ -12,7 +12,6 @@ fn getConfigPath() ![]const u8 {
 pub fn main() !void {
     var buf: [512]u8 = undefined;
     var fixed = std.heap.FixedBufferAllocator.init(&buf);
-    defer fixed.reset();
     const allocator = fixed.allocator();
 
     const stdout = std.io.getStdOut().writer();
