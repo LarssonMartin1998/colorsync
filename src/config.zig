@@ -3,14 +3,6 @@ const utils = @import("utils.zig");
 
 const File = std.fs.File;
 
-const GetCurrentError = error{
-    Error,
-};
-
-const ValidateError = error{
-    ErrorsFound,
-};
-
 pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.ArrayList([]const u8) {
     const configFile = try std.fs.openFileAbsolute(configDir, .{
         .mode = File.OpenMode.read_only,
@@ -65,8 +57,7 @@ pub fn getCurrent() ![]u8 {
         return value;
     }
 
-    // TODO: Improve error handling
-    return GetCurrentError.Error;
+    return error.CurrentNotFound;
 }
 
 pub fn validateAlloc(allocator: std.mem.Allocator, entries: *std.ArrayList([]const u8)) !void {
@@ -97,7 +88,7 @@ pub fn validateAlloc(allocator: std.mem.Allocator, entries: *std.ArrayList([]con
     try bw.flush();
 
     if (errcount > 0) {
-        return ValidateError.ErrorsFound;
+        return error.ValidationFoundErrors;
     }
 }
 
@@ -175,5 +166,5 @@ test "Validate config" {
     }
 
     const result = validateAlloc(allocator, &entries_with_duplicates);
-    try std.testing.expectEqual(result, ValidateError.ErrorsFound);
+    try std.testing.expectEqual(result, error.ValidationFoundErrors);
 }
