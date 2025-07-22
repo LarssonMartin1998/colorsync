@@ -60,7 +60,11 @@ pub fn getCurrent() ![]u8 {
     return error.CurrentNotFound;
 }
 
-pub fn validateAlloc(allocator: std.mem.Allocator, entries: *std.ArrayList([]const u8)) !void {
+pub fn validate(entries: *std.ArrayList([]const u8)) !void {
+    var buf: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
+
     var set = std.HashMap([]const u8, void, std.hash_map.StringContext, 10).init(allocator);
     defer set.deinit();
 
@@ -153,7 +157,7 @@ test "Validate config" {
     try entries.append("row2");
     try entries.append("row3");
 
-    try validateAlloc(allocator, &entries);
+    try validate(&entries);
 
     var entries_with_duplicates = std.ArrayList([]const u8).init(allocator);
     defer entries_with_duplicates.deinit();
@@ -165,6 +169,6 @@ test "Validate config" {
         }
     }
 
-    const result = validateAlloc(allocator, &entries_with_duplicates);
+    const result = validate(&entries_with_duplicates);
     try std.testing.expectEqual(result, error.ValidationFoundErrors);
 }
