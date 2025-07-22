@@ -7,7 +7,7 @@ pub const Context = struct {
     readAlloc: fn (allocator: std.mem.Allocator, configDir: []const u8) anyerror!std.ArrayList([]const u8),
     setCurrent: fn (newCurrent: []const u8) anyerror!void,
     getCurrent: fn () anyerror![]u8,
-    validate: fn (entries: *std.ArrayList([]const u8)) anyerror!void,
+    validate: fn (entries: *const std.ArrayList([]const u8)) anyerror!void,
 };
 
 pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.ArrayList([]const u8) {
@@ -67,12 +67,12 @@ pub fn getCurrent() ![]u8 {
     return error.CurrentNotFound;
 }
 
-pub fn validate(entries: *std.ArrayList([]const u8)) !void {
-    var buf: [4096]u8 = undefined;
+pub fn validate(entries: *const std.ArrayList([]const u8)) !void {
+    var buf: [2048]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fba.allocator();
 
-    var set = std.HashMap([]const u8, void, std.hash_map.StringContext, 10).init(allocator);
+    var set = std.HashMap([]const u8, void, std.hash_map.StringContext, 30).init(allocator);
     defer set.deinit();
 
     try set.ensureTotalCapacity(10);

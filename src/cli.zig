@@ -67,7 +67,7 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
         .set => setCmd(context),
         .get => getCmd(context),
         .show => showCmd(allocator, context),
-        .validate => validateCmd(context),
+        .validate => validateCmd(allocator, context),
     };
 }
 
@@ -104,6 +104,13 @@ fn showCmd(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
     try bw.flush();
 }
 
-fn validateCmd(_: *const ConfigContext) !void {
-    std.debug.print("validate\n", .{});
+fn validateCmd(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
+    var config_path_buf: [64]u8 = undefined;
+    const config_path = try utils.getConfigPath(&config_path_buf);
+
+    const entries = try context.readAlloc(allocator, config_path);
+    context.validate(&entries) catch |err| switch (err) {
+        error.ValidationFoundErrors => {},
+        else => return err,
+    };
 }
