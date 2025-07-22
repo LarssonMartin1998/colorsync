@@ -12,6 +12,11 @@ pub fn getEnv(env: [*c]const u8) std.process.GetEnvVarOwnedError![]u8 {
     return std.mem.span(result_ptr);
 }
 
+pub fn getConfigPath(buf: []u8) ![]const u8 {
+    const home_path = try getEnv("HOME");
+    return try std.fmt.bufPrint(buf, "{s}/.config/colorsync/colorsyncrc", .{home_path});
+}
+
 test "Heapless environment variable" {
     const allocator = std.testing.allocator;
     const heap_home_path = try std.process.getEnvVarOwned(allocator, "HOME");
