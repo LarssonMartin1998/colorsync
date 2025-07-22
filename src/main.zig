@@ -8,5 +8,12 @@ pub fn main() !void {
     var fixed = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fixed.allocator();
 
-    try cli.run(allocator);
+    const configContext = config.Context{
+        .readAlloc = config.readAlloc,
+        .setCurrent = config.setCurrent,
+        .getCurrent = config.getCurrent,
+        .validate = config.validate,
+    };
+
+    try cli.run(allocator, &configContext);
 }
