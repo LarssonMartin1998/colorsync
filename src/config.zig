@@ -3,6 +3,13 @@ const utils = @import("utils.zig");
 
 const File = std.fs.File;
 
+pub const Context = struct {
+    readAlloc: fn (allocator: std.mem.Allocator, configDir: []const u8) anyerror!std.ArrayList([]const u8),
+    setCurrent: fn (newCurrent: []const u8) anyerror!void,
+    getCurrent: fn () anyerror![]u8,
+    validate: fn (entries: *std.ArrayList([]const u8)) anyerror!void,
+};
+
 pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.ArrayList([]const u8) {
     const configFile = try std.fs.openFileAbsolute(configDir, .{
         .mode = File.OpenMode.read_only,
