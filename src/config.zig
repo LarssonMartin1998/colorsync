@@ -3,11 +3,13 @@ const utils = @import("utils.zig");
 
 const File = std.fs.File;
 
+const stderr = std.io.getStdErr().writer();
+
 pub const Context = struct {
     readAlloc: fn (allocator: std.mem.Allocator, configDir: []const u8) anyerror!std.ArrayList([]const u8),
     setCurrent: fn (newCurrent: []const u8) anyerror!void,
     getCurrent: fn () anyerror![]u8,
-    validate: fn (entries: *const std.ArrayList([]const u8)) anyerror!void,
+    validate: fn (writer: anytype, entries: *const std.ArrayList([]const u8), only_output_on_err: bool) anyerror!void,
 };
 
 pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.ArrayList([]const u8) {
@@ -28,8 +30,10 @@ pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.Array
 }
 
 pub fn setCurrent(newCurrent: []const u8) !void {
-    // TODO: Verify input, don't accept any delimiters etc
-    //
+    if (!utils.isAlphanumericAscii(newCurrent)) {
+        return error.NonAlphanumericArg;
+    }
+
     const home_path = try utils.getEnv("HOME");
 
     const state_dir_from_home = "/.local/state/colorsync";
@@ -67,7 +71,7 @@ pub fn getCurrent() ![]u8 {
     return error.CurrentNotFound;
 }
 
-pub fn validate(entries: *const std.ArrayList([]const u8)) !void {
+pub fn validate(writer: anytype, entries: *const std.ArrayList([]const u8), only_output_on_err: bool) !void {
     var buf: [2048]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fba.allocator();
@@ -76,10 +80,6 @@ pub fn validate(entries: *const std.ArrayList([]const u8)) !void {
     defer set.deinit();
 
     try set.ensureTotalCapacity(10);
-
-    const stderr = std.io.getStdErr().writer();
-    var bw = std.io.bufferedWriter(stderr);
-    const writer = bw.writer();
 
     var errcount: u16 = 0;
     for (entries.items) |entry| {
@@ -90,13 +90,16 @@ pub fn validate(entries: *const std.ArrayList([]const u8)) !void {
         } else {
             result_ptr.value_ptr.* = void{};
         }
+
+        if (!utils.isAlphanumericAscii(entry)) {
+            errcount += 1;
+            try writer.print("Error: Found character not matching the supported format [a-z], [A-Z], [0-9] in \"{s}\"!\n", .{entry});
+        }
     }
 
-    if (errcount == 0) {
+    if (errcount == 0 and !only_output_on_err) {
         try writer.print("Your config looks good, no errors found.\n", .{});
     }
-
-    try bw.flush();
 
     if (errcount > 0) {
         return error.ValidationFoundErrors;
@@ -164,7 +167,7 @@ test "Validate config" {
     try entries.append("row2");
     try entries.append("row3");
 
-    try validate(&entries);
+    try validate(std.io.null_writer, &entries, true);
 
     var entries_with_duplicates = std.ArrayList([]const u8).init(allocator);
     defer entries_with_duplicates.deinit();
@@ -176,6 +179,18 @@ test "Validate config" {
         }
     }
 
-    const result = validate(&entries_with_duplicates);
-    try std.testing.expectEqual(result, error.ValidationFoundErrors);
+    const duplicate_result = validate(std.io.null_writer, &entries_with_duplicates, true);
+    try std.testing.expectEqual(duplicate_result, error.ValidationFoundErrors);
+
+    var entries_invalid_names = std.ArrayList([]const u8).init(allocator);
+    defer entries_invalid_names.deinit();
+
+    try entries_invalid_names.ensureTotalCapacity(10);
+    try entries_invalid_names.append("1234!@#$");
+    try entries_invalid_names.append("ASlkjDF,.|");
+    try entries_invalid_names.append("<>,.");
+    try entries_invalid_names.append("äöå");
+
+    const name_result = validate(std.io.null_writer, &entries_invalid_names, true);
+    try std.testing.expectEqual(name_result, error.ValidationFoundErrors);
 }

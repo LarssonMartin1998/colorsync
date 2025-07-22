@@ -69,14 +69,32 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
         return;
     };
 
+    var bw = std.io.bufferedWriter(stderr);
+    const writer = bw.writer();
+    _ = try writer.write("Warning: Your config has the following issues:");
+
+    const validation_result = validateConfig(writer, context);
+    validation_result catch |err| switch (err) {
+        error.ValidationFoundErrors => {
+            _ = try writer.write("\n\n");
+            try bw.flush();
+        },
+        else => return err,
+    };
+
     (switch (command) {
         .set => setCmd(allocator, context, &iter),
         .get => getCmd(context, res),
-        .show => showCmd(allocator, context),
-        .validate => validateCmd(allocator, context),
+        .show => showCmd(context),
+        .validate => {
+            if (validation_result != error.ValidationFoundErrors) {
+                try validateCmd(context);
+            }
+        },
     }) catch |err| switch (err) {
         error.MissingArgument => try stderr.print("Missing <string> argument for <command> set\n", .{}),
         error.SuppliedArgNotInConfig => try stderr.print("Supplied <string> argument for <command> set doesn't exist in config.\n", .{}),
+        error.NonAlphanumericArg => try stderr.print("Invalid input, only text with [A-Z], [a-z], [0-9] is supported.\n", .{}),
         else => return err,
     };
 }
@@ -100,6 +118,18 @@ fn getConfigEntriesAlloc(allocator: std.mem.Allocator, context: *const ConfigCon
     var buf: [64]u8 = undefined;
     const path = try utils.getConfigPath(&buf);
     return try context.readAlloc(allocator, path);
+}
+
+fn validateConfig(writer: anytype, context: *const ConfigContext) !void {
+    var config_path_buf: [64]u8 = undefined;
+    const config_path = try utils.getConfigPath(&config_path_buf);
+
+    var entriesBuf: [2048]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&entriesBuf);
+    const allocator = fba.allocator();
+
+    const entries = try context.readAlloc(allocator, config_path);
+    return context.validate(writer, &entries, false);
 }
 
 fn setCmd(allocator: std.mem.Allocator, context: *const ConfigContext, iter: *std.process.ArgIterator) !void {
@@ -128,8 +158,7 @@ fn setCmd(allocator: std.mem.Allocator, context: *const ConfigContext, iter: *st
 
     for (entries.items) |entry| {
         if (std.mem.eql(u8, arg, entry)) {
-            try context.setCurrent(arg);
-            return;
+            return context.setCurrent(arg);
         }
     }
 
@@ -144,7 +173,11 @@ fn getCmd(context: *const ConfigContext, _: MainArgs) !void {
     try stdout.print("{s}\n", .{curr});
 }
 
-fn showCmd(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
+fn showCmd(context: *const ConfigContext) !void {
+    var buf: [256]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const allocator = fba.allocator();
+
     const entries = try getConfigEntriesAlloc(allocator, context);
 
     var bw = std.io.bufferedWriter(stdout);
@@ -159,13 +192,14 @@ fn showCmd(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
     try bw.flush();
 }
 
-fn validateCmd(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
-    var config_path_buf: [64]u8 = undefined;
-    const config_path = try utils.getConfigPath(&config_path_buf);
+fn validateCmd(context: *const ConfigContext) !void {
+    var bw = std.io.bufferedWriter(stderr);
+    const writer = bw.writer();
 
-    const entries = try context.readAlloc(allocator, config_path);
-    context.validate(&entries) catch |err| switch (err) {
+    validateConfig(writer, context) catch |err| switch (err) {
         error.ValidationFoundErrors => {},
         else => return err,
     };
+
+    try bw.flush();
 }
