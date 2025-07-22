@@ -15,5 +15,9 @@ pub fn main() !void {
         .validate = config.validate,
     };
 
-    try cli.run(allocator, &configContext);
+    cli.run(allocator, &configContext) catch |err| {
+        const stderr = std.io.getStdErr().writer();
+        try stderr.print("Unexpected error: {s}\n", .{@errorName(err)});
+        std.process.exit(1);
+    };
 }
