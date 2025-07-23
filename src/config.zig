@@ -72,11 +72,11 @@ pub fn getCurrent() ![]u8 {
 }
 
 pub fn validate(writer: anytype, entries: *const std.ArrayList([]const u8), only_output_on_err: bool) !void {
-    var buf: [2048]u8 = undefined;
+    var buf: [8192]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fba.allocator();
 
-    var set = std.HashMap([]const u8, void, std.hash_map.StringContext, 30).init(allocator);
+    var set = std.HashMap([]const u8, void, std.hash_map.StringContext, 50).init(allocator);
     defer set.deinit();
 
     try set.ensureTotalCapacity(10);

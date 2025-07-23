@@ -8,6 +8,8 @@ const ConfigContext = @import("config.zig").Context;
 const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 
+const read_budget = 4096;
+
 const Commands = enum {
     set,
     get,
@@ -60,7 +62,7 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
     }
 
     if (res.args.version != 0) {
-        try stdout.print("colorsync 1.0.0\n", .{});
+        try stdout.print("colorsync 1.0.1\n", .{});
         return;
     }
 
@@ -121,18 +123,15 @@ fn getConfigEntriesAlloc(allocator: std.mem.Allocator, context: *const ConfigCon
 }
 
 fn validateConfig(writer: anytype, context: *const ConfigContext) !void {
-    var config_path_buf: [64]u8 = undefined;
-    const config_path = try utils.getConfigPath(&config_path_buf);
-
-    var entriesBuf: [2048]u8 = undefined;
+    var entriesBuf: [read_budget]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&entriesBuf);
     const allocator = fba.allocator();
 
-    const entries = try context.readAlloc(allocator, config_path);
+    const entries = try getConfigEntriesAlloc(allocator, context);
     return context.validate(writer, &entries, false);
 }
 
-fn setCmd(allocator: std.mem.Allocator, context: *const ConfigContext, iter: *std.process.ArgIterator) !void {
+fn setCmd(main_allocator: std.mem.Allocator, context: *const ConfigContext, iter: *std.process.ArgIterator) !void {
     const params = comptime clap.parseParamsComptime(
         \\-h, --help Display this help and exit.
         \\<string> Existing theme to set as active theme in "~/.local/state/colorsync/current".
@@ -141,7 +140,7 @@ fn setCmd(allocator: std.mem.Allocator, context: *const ConfigContext, iter: *st
     var diag = clap.Diagnostic{};
     var res = clap.parseEx(clap.Help, &params, clap.parsers.default, iter, .{
         .diagnostic = &diag,
-        .allocator = allocator,
+        .allocator = main_allocator,
     }) catch |err| {
         try diag.report(stderr, err);
         return err;
@@ -153,7 +152,11 @@ fn setCmd(allocator: std.mem.Allocator, context: *const ConfigContext, iter: *st
         return;
     }
 
-    const entries = try getConfigEntriesAlloc(allocator, context);
+    var entriesBuf: [read_budget]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&entriesBuf);
+    const entries_allocator = fba.allocator();
+
+    const entries = try getConfigEntriesAlloc(entries_allocator, context);
     const arg = res.positionals[0] orelse return error.MissingArgument;
 
     for (entries.items) |entry| {
@@ -174,7 +177,7 @@ fn getCmd(context: *const ConfigContext, _: MainArgs) !void {
 }
 
 fn showCmd(context: *const ConfigContext) !void {
-    var buf: [256]u8 = undefined;
+    var buf: [read_budget]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fba.allocator();
 

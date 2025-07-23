@@ -19,7 +19,7 @@
         stdenv = pkgs.stdenv;
 
         name = "colorsync";
-        version = "1.0.0";
+        version = "1.0.1";
       in
       {
         packages.colorsync = stdenv.mkDerivation {
