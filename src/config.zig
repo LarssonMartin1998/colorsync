@@ -34,10 +34,12 @@ pub fn setCurrent(newCurrent: []const u8) !void {
         return error.NonAlphanumericArg;
     }
 
-    const home_path = try utils.getEnv("HOME");
+    var env_buf: [64]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&env_buf);
+    const allocator = fba.allocator();
+    const home_path = try std.process.getEnvVarOwned(allocator, "HOME");
 
     const state_dir_from_home = "/.local/state/colorsync";
-
     var buf: [96]u8 = undefined;
     const state_dir_path = try std.fmt.bufPrint(&buf, "{s}" ++ state_dir_from_home, .{home_path});
 
@@ -56,7 +58,11 @@ pub fn setCurrent(newCurrent: []const u8) !void {
 }
 
 pub fn getCurrent() ![]u8 {
-    const home_path = try utils.getEnv("HOME");
+    var env_buf: [64]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&env_buf);
+    const allocator = fba.allocator();
+    const home_path = try std.process.getEnvVarOwned(allocator, "HOME");
+
     var buf: [96]u8 = undefined;
     const state_file_path = try std.fmt.bufPrint(&buf, "{s}" ++ "/.local/state/colorsync/current", .{home_path});
 
