@@ -14,7 +14,6 @@ const Commands = enum {
     set,
     get,
     show,
-    validate,
 };
 
 const main_parsers = .{
@@ -31,7 +30,6 @@ const main_params = clap.parseParamsComptime(
     \\    set <string>  -    Set new active theme in "~/.local/state/colorsync/current".
     \\    get   -    Get the active theme specified in "~/.local/state/colorsync/current".
     \\    show  -    Show the config at "~/.config/colorsync/colorsyncrc".
-    \\    validate   -   Validate the config. at "~/.config/colorsync/colorsyncrc".
 );
 
 const MainArgs = clap.ResultEx(clap.Help, &main_params, main_parsers);
@@ -48,10 +46,7 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
         .diagnostic = &diag,
         .terminating_positional = 0,
     }) catch |err| {
-        var bw = std.io.bufferedWriter(stderr);
-        const writer = bw.writer();
-        diag.report(&writer, err) catch {};
-        try bw.flush();
+        reportError(diag, err);
         return err;
     };
     defer res.deinit();
@@ -76,28 +71,20 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
     _ = try writer.write("Warning: Your config has the following issues:");
 
     const validation_result = validateConfig(writer, context);
-    validation_result catch |err| switch (err) {
-        error.ValidationFoundErrors => {
-            _ = try writer.write("\n\n");
-            try bw.flush();
-        },
-        else => return err,
+    validation_result catch |err| {
+        handleCliError(err);
+        bw.flush() catch {};
+        return;
     };
 
-    (switch (command) {
+    const result = switch (command) {
         .set => setCmd(allocator, context, &iter),
         .get => getCmd(context, res),
         .show => showCmd(context),
-        .validate => {
-            if (validation_result != error.ValidationFoundErrors) {
-                try validateCmd(context);
-            }
-        },
-    }) catch |err| switch (err) {
-        error.MissingArgument => try stderr.print("Missing <string> argument for <command> set\n", .{}),
-        error.SuppliedArgNotInConfig => try stderr.print("Supplied <string> argument for <command> set doesn't exist in config.\n", .{}),
-        error.NonAlphanumericArg => try stderr.print("Invalid input, only text with [A-Z], [a-z], [0-9] is supported.\n", .{}),
-        else => return err,
+    };
+
+    result catch |err| {
+        handleCliError(err);
     };
 }
 
@@ -119,7 +106,10 @@ fn help(tool_cmd: []const u8, params: []const clap.Param(clap.Help)) !void {
 fn getConfigEntriesAlloc(allocator: std.mem.Allocator, context: *const ConfigContext) !std.ArrayList([]const u8) {
     var buf: [64]u8 = undefined;
     const path = try utils.getConfigPath(&buf);
-    return try context.readAlloc(allocator, path);
+
+    return context.readAlloc(allocator, path) catch |err| {
+        return err;
+    };
 }
 
 fn validateConfig(writer: anytype, context: *const ConfigContext) !void {
@@ -127,8 +117,11 @@ fn validateConfig(writer: anytype, context: *const ConfigContext) !void {
     var fba = std.heap.FixedBufferAllocator.init(&entriesBuf);
     const allocator = fba.allocator();
 
-    const entries = try getConfigEntriesAlloc(allocator, context);
-    return context.validate(writer, &entries, false);
+    const entries = getConfigEntriesAlloc(allocator, context) catch |err| {
+        return err;
+    };
+
+    return context.validate(writer, &entries);
 }
 
 fn setCmd(main_allocator: std.mem.Allocator, context: *const ConfigContext, iter: *std.process.ArgIterator) !void {
@@ -195,14 +188,20 @@ fn showCmd(context: *const ConfigContext) !void {
     try bw.flush();
 }
 
-fn validateCmd(context: *const ConfigContext) !void {
+fn reportError(diag: clap.Diagnostic, err: anyerror) void {
     var bw = std.io.bufferedWriter(stderr);
     const writer = bw.writer();
+    diag.report(&writer, err) catch {};
+    bw.flush() catch {};
+}
 
-    validateConfig(writer, context) catch |err| switch (err) {
-        error.ValidationFoundErrors => {},
-        else => return err,
-    };
-
-    try bw.flush();
+fn handleCliError(err: anyerror) void {
+    switch (err) {
+        error.MissingArgument => stderr.print("Missing <string> argument for <command> set\n", .{}) catch {},
+        error.SuppliedArgNotInConfig => stderr.print("Supplied <string> argument for <command> set doesn't exist in config.\n", .{}) catch {},
+        error.NonAlphanumericArg => stderr.print("Invalid input, only text with [A-Z], [a-z], [0-9] is supported.\n", .{}) catch {},
+        error.ValidationFoundErrors => stderr.print("Config validation errors found.\n", .{}) catch {},
+        error.FileNotFound => stderr.print("No Config file found!\n", .{}) catch {},
+        else => stderr.print("Unexpected error: {s}\n", .{@errorName(err)}) catch {},
+    }
 }

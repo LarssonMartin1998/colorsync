@@ -9,13 +9,15 @@ pub const Context = struct {
     readAlloc: fn (allocator: std.mem.Allocator, configDir: []const u8) anyerror!std.ArrayList([]const u8),
     setCurrent: fn (newCurrent: []const u8) anyerror!void,
     getCurrent: fn () anyerror![]u8,
-    validate: fn (writer: anytype, entries: *const std.ArrayList([]const u8), only_output_on_err: bool) anyerror!void,
+    validate: fn (writer: anytype, entries: *const std.ArrayList([]const u8)) anyerror!void,
 };
 
 pub fn readAlloc(allocator: std.mem.Allocator, configDir: []const u8) !std.ArrayList([]const u8) {
-    const configFile = try std.fs.openFileAbsolute(configDir, .{
+    const configFile = std.fs.openFileAbsolute(configDir, .{
         .mode = File.OpenMode.read_only,
-    });
+    }) catch |err| {
+        return err;
+    };
     defer configFile.close();
 
     var entries = std.ArrayList([]const u8).init(allocator);
@@ -77,7 +79,7 @@ pub fn getCurrent() ![]u8 {
     return error.CurrentNotFound;
 }
 
-pub fn validate(writer: anytype, entries: *const std.ArrayList([]const u8), only_output_on_err: bool) !void {
+pub fn validate(writer: anytype, entries: *const std.ArrayList([]const u8)) !void {
     var buf: [8192]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     const allocator = fba.allocator();
@@ -101,10 +103,6 @@ pub fn validate(writer: anytype, entries: *const std.ArrayList([]const u8), only
             errcount += 1;
             try writer.print("Error: Found character not matching the supported format [a-z], [A-Z], [0-9] in \"{s}\"!\n", .{entry});
         }
-    }
-
-    if (errcount == 0 and !only_output_on_err) {
-        try writer.print("Your config looks good, no errors found.\n", .{});
     }
 
     if (errcount > 0) {
@@ -185,7 +183,7 @@ test "Validate config" {
         }
     }
 
-    const duplicate_result = validate(std.io.null_writer, &entries_with_duplicates, true);
+    const duplicate_result = validate(std.io.null_writer, &entries_with_duplicates);
     try std.testing.expectEqual(duplicate_result, error.ValidationFoundErrors);
 
     var entries_invalid_names = std.ArrayList([]const u8).init(allocator);
@@ -197,6 +195,6 @@ test "Validate config" {
     try entries_invalid_names.append("<>,.");
     try entries_invalid_names.append("äöå");
 
-    const name_result = validate(std.io.null_writer, &entries_invalid_names, true);
+    const name_result = validate(std.io.null_writer, &entries_invalid_names);
     try std.testing.expectEqual(name_result, error.ValidationFoundErrors);
 }
