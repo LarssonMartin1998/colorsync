@@ -57,7 +57,7 @@ pub fn run(allocator: std.mem.Allocator, context: *const ConfigContext) !void {
     }
 
     if (res.args.version != 0) {
-        try stdout.print("colorsync 1.0.2\n", .{});
+        try stdout.print("colorsync 1.0.3\n", .{});
         return;
     }
 

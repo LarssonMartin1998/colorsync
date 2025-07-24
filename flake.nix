@@ -22,7 +22,7 @@
         packages.colorsync = (
           env.package {
             pname = "colorsync";
-            version = "1.0.2";
+            version = "1.0.3";
             src = lib.cleanSource self;
 
             lockFile = ./build.zig.zon2json-lock;
