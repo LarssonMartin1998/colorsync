@@ -1,58 +1,39 @@
 {
-  description = "Colorsync flake";
+  description = "Colorsync – Zig project flake";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    zig2nix.url = "github:Cloudef/zig2nix";
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-    }:
+    { self, zig2nix, ... }:
+    let
+      flake-utils = zig2nix.inputs.flake-utils;
+    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = import nixpkgs { inherit system; };
-        stdenv = pkgs.stdenv;
-
-        name = "colorsync";
-        version = "1.0.1";
+        env = zig2nix.outputs.zig-env.${system} { };
+        pkgs = env.pkgs;
+        lib = pkgs.lib;
       in
       {
-        packages.colorsync = stdenv.mkDerivation {
-          pname = name;
-          version = version;
-          src = ./.;
+        packages.colorsync = (
+          env.package {
+            pname = "colorsync";
+            version = "1.0.2";
+            src = lib.cleanSource self;
 
-          nativeBuildInputs = with pkgs; [
-            zig
-          ];
+            lockFile = ./build.zig.zon2json-lock;
+          }
+        );
 
-          buildPhase = ''
-            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-            zig build --verbose --color off --summary all
-          '';
-
-          doCheck = true;
-          checkPhase = ''
-            zig build test --summary all
-          '';
-
-          installPhase = ''
-            runHook preInstall
-
-            mkdir -p $out
-            cp -r zig-out/* $out/
-
-            runHook postInstall
-          '';
-        };
-
-        packages.hello = pkgs.hello;
         packages.default = self.packages.${system}.colorsync;
+
+        apps.default = env.app [ ] "zig build run -- \"$@\"";
+        apps.test = env.app [ ] "zig build test -- \"$@\"";
+        apps.build = env.app [ ] "zig build \"$@\"";
       }
     );
 }
