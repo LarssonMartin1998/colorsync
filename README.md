@@ -37,6 +37,17 @@ set_colorscheme()
 
 If you need to switch themes in an application that doesn’t natively support file watching, consider using Watchman to monitor `~/.local/state/colorsync/current` and trigger a script when the file changes.
 
+## Config
+
+The config only holds pure text, each line is an entry, and each entry only signals valid themes that you can switch to. The config resides at `~/.config/colorsync/colorsyncrc`.
+
+Here is my config shown in the preview gif:
+```
+ayudark
+ayumirage
+ayulight
+```
+
 ## Build & Run with Nix
 
 ```bash
